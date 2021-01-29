@@ -3,28 +3,22 @@
 const app = require('express')();
 const http = require('http').Server(app);
 const io = require('socket.io')(http);
-const conexion = require(`${__dirname}/database/connection.js`);
+const config = require(`${__dirname}/config.js`);
 
 const { Telegraf } = require('telegraf');
 
-const bot = new Telegraf('1451212413:AAE-6y0BXIuMqOS90ER0X8FYZRHobBMSP5o');
-
-function sendMessage(message){
-    io.emit('chat message', message);
-}
+const bot = new Telegraf(config.telegram.token);
 
 // Controllers
 const usersController = require(`${__dirname}/app/controllers/usersController.js`);
+const driversController = require(`${__dirname}/app/controllers/driversController.js`);
 
 // ChatBot
-var chat = null
 
 // * Welcome
 bot.hears(['hi', 'Hi', 'HI', 'hola', 'Hola', 'HOLA'], (ctx) => {
-    sendMessage(`${ctx.message.chat.first_name} ${ctx.message.chat.last_name}: ${ctx.message.text}`);
-    chat = ctx;
-    usersController.create(ctx.message)
-    let { first_name } = ctx.message.from
+    usersController.create(ctx.message);
+    let { first_name } = ctx.message.from;
 
     ctx.telegram.sendMessage(ctx.chat.id, `Hola ${first_name}, Deseas solicitar un taxi?`, {
         reply_markup: {
@@ -36,9 +30,7 @@ bot.hears(['hi', 'Hi', 'HI', 'hola', 'Hola', 'HOLA'], (ctx) => {
 });
 
 bot.on('location', (ctx) => {
-    usersController.createLocation(ctx.message)
-    console.log(ctx.message.location)
-    
+    usersController.createLocation(ctx.message);
     ctx.telegram.sendMessage(ctx.chat.id, `Que tipo de trasnporte deseas`, {
         reply_markup: {
             inline_keyboard: [
@@ -54,7 +46,30 @@ bot.action('SI', ctx => {
 })
 
 bot.action('NO', ctx => {
-    ctx.reply('Ok. jodete')
+    ctx.reply('Ok, jodete')
+});
+
+// Drivers
+bot.command('/registrarse', ctx => {
+    driversController.create(ctx.message);
+    let { first_name } = ctx.message.from
+    ctx.reply(`Hola, ${first_name}, Bienvenido a nuestra plataforma, gracias por registrarte!`);
+
+    ctx.telegram.sendMessage(ctx.chat.id, `Que tipo de vehículo manejas?`, {
+        reply_markup: {
+            inline_keyboard: [
+                [{text: 'Motocicleta', callback_data: "setVehicleMoto"}, {text: 'Automóvil', callback_data: "setVehicleAuto"}]
+            ]
+        }
+    });
+});
+
+bot.action('setVehicleMoto', ctx => {
+    ctx.reply('Moto')
+});
+
+bot.action('setVehicleAuto', ctx => {
+    ctx.reply('Auto')
 });
 
 bot.launch()
@@ -66,6 +81,7 @@ app.get('/', (req, res) => {
     res.sendFile(__dirname + '/views/chat.html');
 });
 
+
 // SocketIO
 io.on('connection', (socket) => {
     console.log('a user connected');
@@ -74,7 +90,6 @@ io.on('connection', (socket) => {
 io.on('connection', (socket) => {
     socket.on('chat message', (msg) => {
         io.emit('chat message', msg);
-        chat.reply(msg)
     });
 });
 
