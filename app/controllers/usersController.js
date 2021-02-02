@@ -5,48 +5,65 @@ module.exports = {
     index: () => {
 
     },
-    create: (data) => {
-        connection.beginTransaction(function(err) {
-            let query;
-            if (!err){
-                let date = moment().format('YYYY-MM-DD hh:mm:ss');
-                query = `SELECT * FROM users where code = ${data.from.id}`;
-                connection.query(query, function(err, result) {
-                    if (!err) {
-                        if(!result.length){
-                            query = `INSERT INTO users (code, name, created_at, updated_at, deleted_at) VALUES ("${data.from.id}", "${data.from.first_name} ${data.from.last_name}", "${ date }", "${ date }", NULL)`;
-                            connection.query(query, function(err, result) {
-                                if (!err) {
-                                    connection.commit();
-                                }
-                            });
-                        }
-                    }
-                });
-            }
+    find: (code) => {
+        let query;
+        let date = moment().format('YYYY-MM-DD hh:mm:ss');
+        query = `SELECT * FROM users where code = ${code}`;
+        return new Promise(function (resolve, reject) {
+            connection.query(query, function (err, results) {
+                if (err) return reject(err);
+                return resolve(results);
+            });
         });
     },
-    createLocation: (data) => {
-        connection.beginTransaction(function(err) {
-            let query;
-            if (!err){
-                let date = moment().format('YYYY-MM-DD hh:mm:ss');
-                query = `SELECT * FROM users where code = ${data.from.id}`;
-                connection.query(query, function(err, result) {
-                    if (!err) {
-                        if(result.length){
-                            query = `INSERT INTO locations
-                                        (user_id, latitude, longitude, created_at, updated_at, deleted_at) VALUES
-                                        (${result[0].id}, "${data.location.latitude}", "${data.location.longitude}", "${ date }", "${ date }", NULL)`;
-                            connection.query(query, function(err, result) {
-                                if (!err) {
-                                    connection.commit();
-                                }
-                            });
-                        }
-                    }
-                });
-            }
+    create: async (data) => {
+        let date = moment().format('YYYY-MM-DD hh:mm:ss');
+        let query = `INSERT INTO users (code, name, created_at, updated_at, deleted_at) VALUES ("${data.id}", "${data.first_name} ${data.last_name}", "${ date }", "${ date }", NULL)`;
+        let insert = new Promise(function (resolve, reject) {
+            connection.query(query, function (err, results) {
+                if (err) return reject(err);
+                return resolve(results.insertId);
+            });
+        });
+
+        let insertId = await insert.then(results => results);
+
+        query = `SELECT * FROM users where id = ${insertId}`;
+        return new Promise(function (resolve, reject) {
+            connection.query(query, function (err, results) {
+                if (err) return reject(err);
+                return resolve(results);
+            });
+        });
+    },
+    createLocation: (id, data) => {
+        let date = moment().format('YYYY-MM-DD hh:mm:ss');
+        let query = `INSERT INTO locations
+                    (user_id, latitude, longitude, created_at, updated_at, deleted_at) VALUES
+                    (${id}, "${data.location.latitude}", "${data.location.longitude}", "${ date }", "${ date }", NULL)`;
+        return new Promise(function (resolve, reject) {
+            connection.query(query, function (err, results) {
+                if (err) return reject(err);
+                return resolve(results.insertId);
+            });
+        });
+    },
+    findLocation: (id) => {
+        let query = `SELECT * FROM locations as l, users as u WHERE u.id = l.user_id and l.id = ${id}`;
+        return new Promise(function (resolve, reject) {
+            connection.query(query, function (err, results) {
+                if (err) return reject(err);
+                return resolve(results);
+            });
+        });
+    },
+    lastLocationByUserCode: (code) => {
+        let query = `SELECT * FROM users as u, locations as l WHERE u.id = l.user_id and u.code = ${code} ORDER BY l.id DESC LIMIT 1`;
+        return new Promise(function (resolve, reject) {
+            connection.query(query, function (err, results) {
+                if (err) return reject(err);
+                return resolve(results);
+            });
         });
     }
 }
