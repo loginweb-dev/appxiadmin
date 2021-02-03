@@ -5,6 +5,7 @@ module.exports = {
             location_id bigint(20) UNSIGNED DEFAULT NULL,
             driver_id bigint(20) UNSIGNED DEFAULT NULL,
             status int(11) NULL DEFAULT '1',
+            rating int(11) NULL DEFAULT NULL,
             created_at timestamp NULL DEFAULT NULL,
             updated_at timestamp NULL DEFAULT NULL,
             deleted_at timestamp NULL DEFAULT NULL

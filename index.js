@@ -55,7 +55,7 @@ async function createDriver(ctx){
 
 async function welcome(ctx){
     let user = await createUser(ctx);
-    let { first_name } = ctx.message;
+    let { first_name } = ctx.message.from;
     ctx.telegram.sendMessage(ctx.chat.id, `\u{1f44b} Hola ${first_name}, Deseas solicitar un taxi?`, {
         reply_markup: {
             inline_keyboard: [
@@ -152,31 +152,38 @@ bot.action('aceptar_solicitud', async ctx => {
     // Obtener ID
     let { text } = ctx.update.callback_query.message.reply_markup.inline_keyboard[0][0];
     let location_id = text.replace('Aceptar ID:', '');
-    
-    let { id } = ctx.update.callback_query.message.chat;
-    // Obtener conductor
-    let driver = await driversController.find(id);
-    // Guardar servicio
-    let service = await servicesController.create(location_id, driver[0].id);
-    // Obtener información de la ubicación
-    let location = await usersController.findLocation(location_id);
-    if(location.length){
-        ctx.telegram.sendMessage(location[0].code, `\u{1f44d} Solicitud de taxi aceptada!!!`);
-        // Actualizar estado del conducto a ocupado "2"
-        await driversController.updateColumn('status', 2, id);
-    }
 
-    ctx.telegram.sendMessage(ctx.chat.id, `Notificación enviada!!! Cuanto tiempo estimas que tardes en llegar?`, {
-        reply_markup: {
-            inline_keyboard: [
-                [
-                    {text: '5:00 min', callback_data: "cinco_min"},
-                    {text: '10:00 min', callback_data: "diez_min"},
-                    {text: '15:00 min', callback_data: "quince_min"}
-                ]
-            ]
+    let service = await servicesController.findServiceByLocation(location_id);
+    
+    if(!service.length){
+        let { id } = ctx.update.callback_query.message.chat;
+        // Obtener conductor
+        let driver = await driversController.find(id);
+        // Guardar servicio
+        let service = await servicesController.create(location_id, driver[0].id);
+        // Obtener información de la ubicación
+        let location = await usersController.findLocation(location_id);
+        if(location.length){
+            ctx.telegram.sendMessage(location[0].code, `\u{1f44d} Solicitud de taxi aceptada!!!`);
+            // Actualizar estado del conducto a ocupado "2"
+            await driversController.updateColumn('status', 2, id);
         }
-    });
+
+        ctx.telegram.sendMessage(ctx.chat.id, `Notificación enviada!!! Cuanto tiempo estimas que tardes en llegar?`, {
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        {text: '5:00 min', callback_data: "cinco_min"},
+                        {text: '10:00 min', callback_data: "diez_min"},
+                        {text: '15:00 min', callback_data: "quince_min"}
+                    ]
+                ]
+            }
+        });
+    }else{
+        ctx.telegram.sendMessage(ctx.chat.id, `Lo siento, otro conductor ya acepto esta carrera \u{1f622}`);
+        ctx.telegram.sendMessage(ctx.chat.id, `Suerte para la próxima!!!`);
+    }
 });
 bot.action('descartar_solicitud', ctx => {
     ctx.reply('Se descartó la solicitud.');
@@ -193,11 +200,15 @@ bot.action('quince_min', ctx => {
 });
 
 async function sendTimeArrival(ctx, time){
-    ctx.reply('Tiempo estimado enviado');
     let { id } = ctx.update.callback_query.from;
     let service = await servicesController.findLast(id);
     if(service.length){
-        ctx.telegram.sendMessage(service[0].code, `Tu taxi llegará en aproximadamente ${time} minutos. \u{23f1}`);
+        if(service[0].status == 1){
+            ctx.reply('Tiempo estimado enviado');
+            ctx.telegram.sendMessage(service[0].code, `Tu taxi llegará en aproximadamente ${time} minutos. \u{23f1}`);
+        }else{
+            ctx.reply('La carrera seleccionada ya fué finalizada');
+        }
     }
 }
 
@@ -226,12 +237,27 @@ bot.command('/disponible', async ctx => {
 });
 
 bot.action('bad_service', async ctx => {
+    let { id } = ctx.update.callback_query.from;
+    let service = await servicesController.findServiceByUser(id);
+    if(service.length){
+        await servicesController.updateColumn('rating', 1, service[0].id);
+    }
     ctx.reply(`Gracias por tu puntuación, intentaremos mejorar!`);
 });
-bot.action('normal_service', ctx => {
+bot.action('normal_service', async ctx => {
+    let { id } = ctx.update.callback_query.from;
+    let service = await servicesController.findServiceByUser(id);
+    if(service.length){
+        await servicesController.updateColumn('rating', 3, service[0].id);
+    }
     ctx.reply(`Gracias por tu puntuación, estamos trabajando para mejorar el servicio!`);
 });
-bot.action('good_service', ctx => {
+bot.action('good_service', async ctx => {
+    let { id } = ctx.update.callback_query.from;
+    let service = await servicesController.findServiceByUser(id);
+    if(service.length){
+        await servicesController.updateColumn('rating', 5, service[0].id);
+    }
     ctx.reply(`Gracias por tu puntuación, es un gusto ofrecerte nuestros servicios!`);
 });
 

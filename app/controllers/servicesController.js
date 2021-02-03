@@ -6,9 +6,7 @@ module.exports = {
 
     },
     find: (id) => {
-        let query;
-        let date = moment().format('YYYY-MM-DD hh:mm:ss');
-        query = `SELECT * FROM services as s, locations as l, users as u where s.location_id = l.id and l.user_id = u.id and s.id = ${id}`;
+        let query = `SELECT * FROM services as s, locations as l, users as u where s.location_id = l.id and l.user_id = u.id and s.id = ${id}`;
         return new Promise(function (resolve, reject) {
             connection.query(query, function (err, results) {
                 if (err) return reject(err);
@@ -17,10 +15,27 @@ module.exports = {
         });
     },
     findLast: (code) => {
-        let query;
-        let date = moment().format('YYYY-MM-DD hh:mm:ss');
-        query = `SELECT s.*, u.code, d.code as driver_code FROM drivers as d, services as s, locations as l, users as u
+        let query = `SELECT s.*, u.code, d.code as driver_code FROM drivers as d, services as s, locations as l, users as u
                     where d.id = s.driver_id and s.location_id = l.id and l.user_id = u.id and d.code = ${code} ORDER BY s.id DESC LIMIT 1`;
+        return new Promise(function (resolve, reject) {
+            connection.query(query, function (err, results) {
+                if (err) return reject(err);
+                return resolve(results);
+            });
+        });
+    },
+    findServiceByUser: (code) => {
+        let query = `SELECT s.* FROM drivers as d, services as s, locations as l, users as u
+                    where s.location_id = l.id and l.user_id = u.id and u.code = ${code} ORDER BY s.id DESC LIMIT 1`;
+        return new Promise(function (resolve, reject) {
+            connection.query(query, function (err, results) {
+                if (err) return reject(err);
+                return resolve(results);
+            });
+        });
+    },
+    findServiceByLocation: (location_id) => {
+        let query = `SELECT * FROM services WHERE location_id = ${location_id}`;
         return new Promise(function (resolve, reject) {
             connection.query(query, function (err, results) {
                 if (err) return reject(err);
@@ -40,7 +55,6 @@ module.exports = {
     },
     // Actualizar solo una columna
     updateColumn: (key, value, id) => {
-        let date = moment().format('YYYY-MM-DD hh:mm:ss');
         let query = `UPDATE services SET ${key} = "${value}" where id = "${id}"`;
         return new Promise(function (resolve, reject) {
             connection.query(query, function (err, results) {
