@@ -4,7 +4,7 @@ module.exports = {
             id bigint(20) UNSIGNED PRIMARY KEY AUTO_INCREMENT NOT NULL,
             location_id bigint(20) UNSIGNED DEFAULT NULL,
             driver_id bigint(20) UNSIGNED DEFAULT NULL,
-            status int(11) DEFAULT '1',
+            status int(11) NULL DEFAULT '1',
             created_at timestamp NULL DEFAULT NULL,
             updated_at timestamp NULL DEFAULT NULL,
             deleted_at timestamp NULL DEFAULT NULL

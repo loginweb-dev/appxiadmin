@@ -5,7 +5,7 @@ const http = require('http').Server(app);
 const io = require('socket.io')(http);
 const config = require(`${__dirname}/config.js`);
 
-const { Telegraf } = require('telegraf');
+const { Telegraf, Markup } = require('telegraf');
 
 const bot = new Telegraf(config.telegram.token);
 
@@ -16,8 +16,15 @@ const servicesController = require(`${__dirname}/app/controllers/servicesControl
 
 // ChatBot
 
+const keyboard = Markup.inlineKeyboard([
+    Markup.button.url('❤️', 'http://telegraf.js.org'),
+    Markup.button.callback('Delete', 'delete')
+])
+
+
 // * Welcome
 bot.start((ctx) => {
+    // ctx.replyWithContact('+59175199157', 'Agustin Mejia');
     welcome(ctx);
 });
 
@@ -48,7 +55,7 @@ async function createDriver(ctx){
 
 async function welcome(ctx){
     let user = await createUser(ctx);
-    let { first_name } = ctx.message.from;
+    let { first_name } = ctx.message;
     ctx.telegram.sendMessage(ctx.chat.id, `\u{1f44b} Hola ${first_name}, Deseas solicitar un taxi?`, {
         reply_markup: {
             inline_keyboard: [
@@ -63,20 +70,34 @@ bot.action('newService', ctx => {
     ctx.reply(`Envíanos tu ubicación \u{1f4cd}`);
 });
 bot.action('NO', ctx => {
-    ctx.reply('Ok, jodete entonces!')
+    ctx.reply('Gracias por ingresar a nuestro chat asistente, hasta luego!')
 });
 
 
 bot.on('location', async ctx => {
-    let user = await createUser(ctx);
-    usersController.createLocation(user.id, ctx.message);
-    ctx.telegram.sendMessage(ctx.chat.id, `Que tipo de transporte deseas?`, {
-        reply_markup: {
-            inline_keyboard: [
-                [{text: 'Motocicleta \u{1f3cd}', callback_data: "selectMoto"}, {text: 'Automóvil \u{1f698}', callback_data: "selectAuto"}]
-            ]
+    var { id } = ctx.update.message.from;
+    var service = await servicesController.findLast(id);
+    if(service.length){
+        if(service[0].status == 1){
+            var { latitude, longitude } = ctx.message.location;
+            ctx.telegram.sendLocation(service[0].code, latitude, longitude).then();
+        }else if(service[0].status == 0){
+            ctx.reply(`\u{1f625} Tu pasajeron canceló el servicio de taxi.`);
+        }else{
+            ctx.reply(`\u{2139} Debes tener un pasajero en espera para enviarle tu ubicación.`);
         }
-    });
+        
+    }else{
+        let user = await createUser(ctx);
+        usersController.createLocation(user.id, ctx.message);
+        ctx.telegram.sendMessage(ctx.chat.id, `Que tipo de transporte deseas?`, {
+            reply_markup: {
+                inline_keyboard: [
+                    [{text: 'Motocicleta \u{1f3cd}', callback_data: "selectMoto"}, {text: 'Automóvil \u{1f698}', callback_data: "selectAuto"}]
+                ]
+            }
+        });
+    }
 });
 
 
@@ -95,13 +116,15 @@ function selectVehicle(ctx){
     driversController.getDriverTypeVehicle(ctx).then(async function(res) {
         var location = await usersController.lastLocationByUserCode(res.id).then(results => results);
         res.results.map(driver => {
-            ctx.telegram.sendMessage(driver.code, `Hola ${driver.name}, un cliente solicitó una carrera!`, {
-                reply_markup: {
-                    inline_keyboard: [
-                        [{text: `Ver solicitud ID:${location[0].id}`, callback_data: "ver_solicitud"}]
-                    ]
-                }
-            });
+            if(driver.status == 1){
+                ctx.telegram.sendMessage(driver.code, `Hola ${driver.name}, un cliente solicitó una carrera!`, {
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{text: `Ver solicitud ID:${location[0].id}`, callback_data: "ver_solicitud"}]
+                        ]
+                    }
+                });
+            }
         });
     });
 }
@@ -139,6 +162,8 @@ bot.action('aceptar_solicitud', async ctx => {
     let location = await usersController.findLocation(location_id);
     if(location.length){
         ctx.telegram.sendMessage(location[0].code, `\u{1f44d} Solicitud de taxi aceptada!!!`);
+        // Actualizar estado del conducto a ocupado "2"
+        await driversController.updateColumn('status', 2, id);
     }
 
     ctx.telegram.sendMessage(ctx.chat.id, `Notificación enviada!!! Cuanto tiempo estimas que tardes en llegar?`, {
@@ -172,9 +197,43 @@ async function sendTimeArrival(ctx, time){
     let { id } = ctx.update.callback_query.from;
     let service = await servicesController.findLast(id);
     if(service.length){
-        ctx.telegram.sendMessage(service[0].code, `Tu taxi llegará en ${time} minutos. \u{23f1}`);
+        ctx.telegram.sendMessage(service[0].code, `Tu taxi llegará en aproximadamente ${time} minutos. \u{23f1}`);
     }
 }
+
+bot.command('/disponible', async ctx => {
+    let { id } = ctx.message.from
+    await driversController.updateColumn('status', 1, id);
+    var service = await servicesController.findLast(id);
+    if(service.length){
+        // Actualizar estado del servicio a realizado "2"
+        await servicesController.updateColumn('status', 2, service[0].id);
+
+        // Pedir calificación al cliente
+        ctx.telegram.sendMessage(service[0].code, `Que te pareció el servicio?`, {
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        {text: '\u{1f61f}', callback_data: "bad_service"},
+                        {text: '\u{1f610}', callback_data: "normal_service"},
+                        {text: '\u{1f60d}', callback_data: "good_service"}
+                    ]
+                ]
+            }
+        });
+    }
+    ctx.reply(`Estado disponible activado! \u{1f44d}`);
+});
+
+bot.action('bad_service', async ctx => {
+    ctx.reply(`Gracias por tu puntuación, intentaremos mejorar!`);
+});
+bot.action('normal_service', ctx => {
+    ctx.reply(`Gracias por tu puntuación, estamos trabajando para mejorar el servicio!`);
+});
+bot.action('good_service', ctx => {
+    ctx.reply(`Gracias por tu puntuación, es un gusto ofrecerte nuestros servicios!`);
+});
 
 // Drivers
 bot.command('/registrarse', async ctx => {

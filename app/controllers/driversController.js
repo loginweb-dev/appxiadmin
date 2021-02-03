@@ -26,6 +26,17 @@ module.exports = {
             });
         });
     },
+    // Actualizar solo una columna
+    updateColumn: (key, value, code) => {
+        let date = moment().format('YYYY-MM-DD hh:mm:ss');
+        let query = `UPDATE drivers SET ${key} = "${value}" where code = "${code}"`;
+        return new Promise(function (resolve, reject) {
+            connection.query(query, function (err, results) {
+                if (err) return reject(err);
+                return resolve(results);
+            });
+        });
+    },
     setVehicleType: (data) => {
         connection.beginTransaction(function(err) {
             let date = moment().format('YYYY-MM-DD hh:mm:ss');

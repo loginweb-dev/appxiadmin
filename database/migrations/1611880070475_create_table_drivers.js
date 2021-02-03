@@ -7,7 +7,7 @@ module.exports = {
             avatar varchar(191) COLLATE utf8mb4_unicode_ci NULL,
             ci varchar(191) COLLATE utf8mb4_unicode_ci NULL,
             vehicle_type varchar(191) COLLATE utf8mb4_unicode_ci NULL,
-            status int(11) DEFAULT '1',
+            status int(11) DEFAULT NULL DEFAULT '1',
             created_at timestamp NULL DEFAULT NULL,
             updated_at timestamp NULL DEFAULT NULL,
             deleted_at timestamp NULL DEFAULT NULL

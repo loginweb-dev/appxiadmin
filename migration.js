@@ -14,5 +14,5 @@ var connection = mysql.createPool({
 });
 
 migration.init(connection, `${__dirname}/database/migrations`, function() {
-  console.log("finished running migrations");
+  console.log("Migración finalizada");
 });
