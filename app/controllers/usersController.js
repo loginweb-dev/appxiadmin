@@ -6,9 +6,16 @@ module.exports = {
 
     },
     find: (code) => {
-        let query;
-        let date = moment().format('YYYY-MM-DD hh:mm:ss');
-        query = `SELECT * FROM users where code = ${code}`;
+        let query = `SELECT * FROM users where code = ${code}`;
+        return new Promise(function (resolve, reject) {
+            connection.query(query, function (err, results) {
+                if (err) return reject(err);
+                return resolve(results);
+            });
+        });
+    },
+    findProccess: (code) => {
+        let query = `SELECT * FROM exec_proccess where code = ${code} and status = 1`;
         return new Promise(function (resolve, reject) {
             connection.query(query, function (err, results) {
                 if (err) return reject(err);
@@ -33,6 +40,16 @@ module.exports = {
             connection.query(query, function (err, results) {
                 if (err) return reject(err);
                 return resolve(results);
+            });
+        });
+    },
+    createProccess: async (code, name) => {
+        let date = moment().format('YYYY-MM-DD hh:mm:ss');
+        let query = `INSERT INTO exec_proccess (code, name, created_at, updated_at) VALUES ("${code}", "${name}", "${ date }", "${ date }")`;
+        return new Promise(function (resolve, reject) {
+            connection.query(query, function (err, results) {
+                if (err) return reject(err);
+                return resolve(results.insertId);
             });
         });
     },
@@ -65,5 +82,14 @@ module.exports = {
                 return resolve(results);
             });
         });
-    }
+    },
+    deleteProccess: async (code) => {
+        let query = `UPDATE exec_proccess SET status = 0 WHERE code = "${code}"`;
+        return new Promise(function (resolve, reject) {
+            connection.query(query, function (err, results) {
+                if (err) return reject(err);
+                return resolve(results.insertId);
+            });
+        });
+    },
 }

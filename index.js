@@ -3,6 +3,7 @@
 const app = require('express')();
 const http = require('http').Server(app);
 const io = require('socket.io')(http);
+const axios = require('axios')
 const config = require(`${__dirname}/config.js`);
 
 const { Telegraf, Markup } = require('telegraf');
@@ -40,16 +41,6 @@ async function createUser(ctx){
         return create[0];
     }else{
         return user[0];
-    }
-}
-
-async function createDriver(ctx){
-    let { from } = ctx.message;
-    let driver = await driversController.find(from.id).then(results => results);
-    if(driver.length == 0){
-        return await driversController.create(from).then(results => results);
-    }else{
-        return driver[0];
     }
 }
 
@@ -263,28 +254,130 @@ bot.action('good_service', async ctx => {
 
 // Drivers
 bot.command('/registrarse', async ctx => {
-    await createDriver(ctx);
-    let { first_name } = ctx.message.from
-    ctx.reply(`Hola, ${first_name}, Bienvenido a nuestra plataforma, gracias por registrarte!`);
+    let { from } = ctx.message;
+    let driver = await driversController.find(from.id).then(results => results);
+    if(driver.length == 0){
+        ctx.reply(`Hola ${first_name}, Bienvenido a nuestra plataforma, gracias por registrarte!`);
 
-    ctx.telegram.sendMessage(ctx.chat.id, `Que tipo de vehículo manejas?`, {
+        ctx.telegram.sendMessage(ctx.chat.id, `Que tipo de vehículo conduces?`, {
+            reply_markup: {
+                inline_keyboard: [
+                    [{text: 'Motocicleta \u{1f3cd}', callback_data: "setDriverVehicleMoto"}, {text: 'Automóvil \u{1f698}', callback_data: "setDriverVehicleAuto"}]
+                ]
+            }
+        });
+    }else{
+        ctx.reply(`Hola ${from.first_name}, ya estás registrado en nuestra plataforma.`);
+        editDriverInfo(ctx);
+    }
+    
+});
+
+// Opciones del conductor
+
+bot.action('setDriverVehicleMoto', async ctx => {
+    driversController.setVehicleType(ctx);
+    let { id } = ctx.update.callback_query.from;
+    await usersController.createProccess(id, 'insert_phone_driver');
+    ctx.reply('Escribe tu número de celular');
+});
+
+bot.action('setDriverVehicleAuto', async ctx => {
+    driversController.setVehicleType(ctx);
+    let { id } = ctx.update.callback_query.from;
+    await usersController.createProccess(id, 'insert_phone_driver');
+    ctx.reply('Escribe tu número de celular');
+});
+
+bot.action('update_phone', async ctx => {
+    let { id } = ctx.update.callback_query.from;
+    await usersController.createProccess(id, 'update_phone_driver');
+    ctx.reply('Escribe tu número de celular');
+});
+
+bot.action('update_avatar', async ctx => {
+    let { id } = ctx.update.callback_query.from;
+    await usersController.createProccess(id, 'update_avatar_driver');
+    ctx.reply('Tómate o elige una fotografía y envíala');
+});
+
+function editDriverInfo(ctx){
+    ctx.telegram.sendMessage(ctx.chat.id, `Puedes editar tu información seleccionando alguna de las siguientes opciones:`, {
         reply_markup: {
             inline_keyboard: [
-                [{text: 'Motocicleta \u{1f3cd}', callback_data: "setVehicleMoto"}, {text: 'Automóvil \u{1f698}', callback_data: "setVehicleAuto"}]
+                [{text: 'Nro de celular \u{1f4f1}', callback_data: "update_phone"}, {text: 'Foto de contacto \u{1f5bc}', callback_data: "update_avatar"}]
             ]
         }
     });
+}
+
+
+bot.on('photo', async ctx => {
+    let { id } = ctx.update.message.from;
+    let proccess = await usersController.findProccess(id);
+    if(proccess.length){
+        let { name, code } = proccess[0];
+
+        // Get file_path
+        let chat_id = ctx.update.message.chat.id;
+        let file_id = ctx.update.message.photo[0].file_id;
+        let url = `${config.telegram.api}/bot${config.telegram.token}/getFile?chat_id=${chat_id}&file_id=${file_id}`
+        let file_info = await axios.get(url).then(res => res.data).catch(error => error);
+        
+        let file_path = '';
+        if(file_info.ok){
+            file_path = file_info.result.file_path;
+        }
+
+        switch (name) {
+            case 'insert_avatar_driver':
+                await driversController.updateColumn('avatar', file_path, code);
+                await usersController.deleteProccess(code);
+                ctx.reply('\u{1f44f} Bien hecho, registro terminado con exito!. Te llegará una notificación cuando un cliente solicite un servicio de taxi.');
+                editDriverInfo(ctx);
+                break;
+            case 'update_avatar_driver':
+                await driversController.updateColumn('avatar', file_path, code);
+                ctx.reply('Imagen de contacto actualizada!');
+                await usersController.deleteProccess(code);
+                // ctx.replyWithPhoto({
+                //     url: `${config.telegram.api}/file/bot${config.telegram.token}/${file_path}`,
+                //     filename: file_path.replace('photos/', '')
+                // });
+                break;
+        
+            default:
+                break;
+        }
+    }
 });
 
-bot.action('setVehicleMoto', ctx => {
-    driversController.setVehicleType(ctx);
-    ctx.reply('Bien hecho, registro terminado con exito!!!')
-});
+bot.on('text', async ctx => {
+    let { from, text } = ctx.update.message;
+    let proccess = await usersController.findProccess(from.id);
 
-bot.action('setVehicleAuto', ctx => {
-    driversController.setVehicleType(ctx);
-    ctx.reply('Bien hecho, registro terminado con exito!!!')
-});
+    if(proccess.length){
+        let { name, code } = proccess[0];
+        switch (name) {
+            case 'insert_phone_driver':
+                await driversController.updateColumn('phone', text, code);
+                await usersController.deleteProccess(code);
+                await usersController.createProccess(from.id, 'insert_avatar_driver');
+                ctx.reply('Envíanos una foto para tu perfil');
+                break;
+            case 'update_phone_driver':
+                await driversController.updateColumn('phone', text, code);
+                ctx.reply('Número de celular actualizado!');
+                await usersController.deleteProccess(code);
+                break;
+        
+            default:
+                break;
+        }
+    }else{
+        welcome(ctx);
+    }
+})
 
 
 bot.launch()
