@@ -2,7 +2,7 @@
 
 const app = require('express')();
 const http = require('http').Server(app);
-const io = require('socket.io')(http);
+// const io = require('socket.io')(http);
 const axios = require('axios')
 const config = require(`${__dirname}/config.js`);
 
@@ -257,8 +257,8 @@ bot.command('/registrarse', async ctx => {
     let { from } = ctx.message;
     let driver = await driversController.find(from.id).then(results => results);
     if(driver.length == 0){
-        ctx.reply(`Hola ${first_name}, Bienvenido a nuestra plataforma, gracias por registrarte!`);
-
+        await driversController.create(from).then(results => results);
+        ctx.reply(`Hola ${from.first_name}, Bienvenido a nuestra plataforma, gracias por registrarte!`);
         ctx.telegram.sendMessage(ctx.chat.id, `Que tipo de vehículo conduces?`, {
             reply_markup: {
                 inline_keyboard: [
@@ -390,15 +390,15 @@ app.get('/', (req, res) => {
 
 
 // SocketIO
-io.on('connection', (socket) => {
-    console.log('a user connected');
-});
+// io.on('connection', (socket) => {
+//     console.log('a user connected');
+// });
 
-io.on('connection', (socket) => {
-    socket.on('chat message', (msg) => {
-        io.emit('chat message', msg);
-    });
-});
+// io.on('connection', (socket) => {
+//     socket.on('chat message', (msg) => {
+//         io.emit('chat message', msg);
+//     });
+// });
 
 // Start server
 http.listen(3000, () => {
