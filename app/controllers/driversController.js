@@ -28,8 +28,7 @@ module.exports = {
     },
     // Actualizar solo una columna
     updateColumn: (key, value, code) => {
-        let date = moment().format('YYYY-MM-DD hh:mm:ss');
-        let query = `UPDATE drivers SET ${key} = "${value}" where code = "${code}"`;
+        let query = `UPDATE drivers SET ${key} = '${value}' where code = "${code}"`;
         return new Promise(function (resolve, reject) {
             connection.query(query, function (err, results) {
                 if (err) return reject(err);
@@ -40,7 +39,7 @@ module.exports = {
     setVehicleType: (data) => {
         connection.beginTransaction(function(err) {
             let date = moment().format('YYYY-MM-DD hh:mm:ss');
-            let type = data.update.callback_query.data == 'setVehicleMoto' ? 'Motocicleta': 'Automóvil';
+            let type = data.update.callback_query.data == 'setDriverVehicleMoto' ? 'Motocicleta': 'Automóvil';
             let query;
             if (!err){
                 query = `UPDATE drivers set

@@ -1,4 +1,5 @@
 module.exports = {
+    api: 'http://127.0.0.1:3000',
     database: {
         host : 'localhost',
         name : 'appxiadmin',

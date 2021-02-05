@@ -15,7 +15,7 @@ module.exports = {
         });
     },
     findProccess: (code) => {
-        let query = `SELECT * FROM exec_proccess where code = ${code} and status = 1`;
+        let query = `SELECT * FROM exec_proccess where code = ${code} and status = 1 ORDER BY id DESC`;
         return new Promise(function (resolve, reject) {
             connection.query(query, function (err, results) {
                 if (err) return reject(err);
@@ -76,6 +76,15 @@ module.exports = {
     },
     lastLocationByUserCode: (code) => {
         let query = `SELECT * FROM users as u, locations as l WHERE u.id = l.user_id and u.code = ${code} ORDER BY l.id DESC LIMIT 1`;
+        return new Promise(function (resolve, reject) {
+            connection.query(query, function (err, results) {
+                if (err) return reject(err);
+                return resolve(results);
+            });
+        });
+    },
+    updateColumn: (key, value, code) => {
+        let query = `UPDATE users SET ${key} = '${value}' where code = "${code}"`;
         return new Promise(function (resolve, reject) {
             connection.query(query, function (err, results) {
                 if (err) return reject(err);

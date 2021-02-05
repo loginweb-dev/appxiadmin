@@ -3,6 +3,7 @@
 const app = require('express')();
 const http = require('http').Server(app);
 // const io = require('socket.io')(http);
+const body_parser = require('body-parser');
 const axios = require('axios')
 const config = require(`${__dirname}/config.js`);
 
@@ -16,11 +17,6 @@ const driversController = require(`${__dirname}/app/controllers/driversControlle
 const servicesController = require(`${__dirname}/app/controllers/servicesController.js`);
 
 // ChatBot
-
-const keyboard = Markup.inlineKeyboard([
-    Markup.button.url('❤️', 'http://telegraf.js.org'),
-    Markup.button.callback('Delete', 'delete')
-])
 
 
 // * Welcome
@@ -96,6 +92,15 @@ bot.on('location', async ctx => {
 bot.action('selectMoto', ctx => {
     selectVehicle(ctx);
     ctx.reply(`Tu solicitud ha sido enviada.`);
+    // let lat = -14.836968;
+    // let lon = -64.901205;
+    // ctx.replyWithLocation(lat, lon, { live_period: 300 }).then((message) => {
+    //     const timer = setInterval(() => {
+    //     lat += Math.random() * 0.001
+    //     lon += Math.random() * 0.001
+    //     ctx.telegram.editMessageLiveLocation(message.chat.id, message.message_id, '', lat, lon).catch(() => clearInterval(timer))
+    //     }, 5000)
+    // })
 });
 
 bot.action('selectAuto', ctx => {
@@ -108,41 +113,24 @@ function selectVehicle(ctx){
         var location = await usersController.lastLocationByUserCode(res.id).then(results => results);
         res.results.map(driver => {
             if(driver.status == 1){
-                ctx.telegram.sendMessage(driver.code, `Hola ${driver.name}, un cliente solicitó una carrera!`, {
-                    reply_markup: {
-                        inline_keyboard: [
-                            [{text: `Ver solicitud ID:${location[0].id}`, callback_data: "ver_solicitud"}]
-                        ]
-                    }
-                });
+                ctx.telegram.sendMessage(driver.code, `Hola ${driver.name}, un cliente solicitó una carrera!`,
+                    Markup.inlineKeyboard(
+                        [Markup.button.url('Ver ubicación', `${config.api}/service?lat=${location[0].latitude}&lng=${location[0].longitude}`), {text: `Aceptar ID:${location[0].id}`, callback_data: "aceptar_solicitud"}]
+                    )
+                );
             }
         });
     });
 }
 
 // Actions
-bot.action('ver_solicitud', async ctx => {
-    // Obtener ID
-    let { text } = ctx.update.callback_query.message.reply_markup.inline_keyboard[0][0];
-    let id = text.replace('Ver solicitud ID:', '');
-    var location = await usersController.findLocation(id).then(results => results);
-    if(location.length > 0){
-        ctx.telegram.sendLocation(ctx.chat.id, location[0].latitude, location[0].longitude);
-        setTimeout(() => {
-            ctx.telegram.sendMessage(ctx.chat.id, `Deseas aceptar el servicio?`, {
-                reply_markup: {
-                    inline_keyboard: [
-                        [{text: `Aceptar ID:${id}`, callback_data: "aceptar_solicitud"}, {text: 'Descartar', callback_data: "descartar_solicitud"}]
-                    ]
-                }
-            });
-        }, 500);
-    }
-});
+
 bot.action('aceptar_solicitud', async ctx => {
     // Obtener ID
-    let { text } = ctx.update.callback_query.message.reply_markup.inline_keyboard[0][0];
+    let { text } = ctx.update.callback_query.message.reply_markup.inline_keyboard[0][1];
     let location_id = text.replace('Aceptar ID:', '');
+
+    // console.log(location_id)
 
     let service = await servicesController.findServiceByLocation(location_id);
     
@@ -183,6 +171,7 @@ bot.action('descartar_solicitud', ctx => {
 bot.action('cinco_min', async ctx => {
     sendTimeArrival(ctx, 5);
 });
+
 bot.action('diez_min', ctx => {
     sendTimeArrival(ctx, 10);
 });
@@ -190,18 +179,59 @@ bot.action('quince_min', ctx => {
     sendTimeArrival(ctx, 15);
 });
 
+
 async function sendTimeArrival(ctx, time){
     let { id } = ctx.update.callback_query.from;
     let service = await servicesController.findLast(id);
     if(service.length){
         if(service[0].status == 1){
-            ctx.reply('Tiempo estimado enviado');
-            ctx.telegram.sendMessage(service[0].code, `Tu taxi llegará en aproximadamente ${time} minutos. \u{23f1}`);
+            
+            ctx.reply('Para ver la ruta que debes seguir presiona el siguiente botón', Markup.inlineKeyboard([
+                Markup.button.url('Ver ruta', `${config.api}/service?code=${service[0].driver_code}&lat=${service[0].latitude}&lng=${service[0].longitude}`),
+            ]));
+            ctx.telegram.sendMessage(service[0].code, `Tu taxi llegará en aproximadamente ${time} minutos. \u{23f1}`, {
+                reply_markup: {
+                    inline_keyboard: [[{text: 'Ver ubicación de mi taxi', callback_data: "get_driver_location"}]]
+                }
+            });
         }else{
             ctx.reply('La carrera seleccionada ya fué finalizada');
         }
     }
 }
+
+bot.action('get_driver_location', async ctx => {
+    var { id } = ctx.update.callback_query.from;
+    var service = await servicesController.findServiceByUser(id);
+    if(service.length){
+        let last_location = service[0].last_location;
+        if(last_location){
+            let location = JSON.parse(last_location);
+            let lat = parseFloat(location.lat);
+            let lon = parseFloat(location.lng);
+            console.log(lat, lon)
+            // @ts-ignore
+            ctx.replyWithLocation(lat, lon, { live_period: 300 }).then((message) => {
+                const timer = setInterval(async () => {
+                    let service = await servicesController.findServiceByUser(id);
+                    if(service.length){
+                        let last_location = service[0].last_location;
+                        if(last_location){
+                            let location = JSON.parse(last_location);
+                            if(lat != parseFloat(location.lat) || lon != parseFloat(location.lng)){
+                                lat = parseFloat(location.lat);
+                                lon = parseFloat(location.lng);
+                                ctx.telegram.editMessageLiveLocation(message.chat.id, message.message_id, '', lat, lon)
+                                .then(() => console.log('exito'))
+                                .catch(() => console.log('error'))
+                            }
+                        }
+                    }
+                }, 2000)
+            })
+        }
+    }
+});
 
 bot.command('/disponible', async ctx => {
     let { id } = ctx.message.from
@@ -262,7 +292,10 @@ bot.command('/registrarse', async ctx => {
         ctx.telegram.sendMessage(ctx.chat.id, `Que tipo de vehículo conduces?`, {
             reply_markup: {
                 inline_keyboard: [
-                    [{text: 'Motocicleta \u{1f3cd}', callback_data: "setDriverVehicleMoto"}, {text: 'Automóvil \u{1f698}', callback_data: "setDriverVehicleAuto"}]
+                    [
+                        {text: 'Motocicleta \u{1f3cd}', callback_data: "setDriverVehicleMoto"},
+                        {text: 'Automóvil \u{1f698}', callback_data: "setDriverVehicleAuto"}
+                    ]
                 ]
             }
         });
@@ -277,40 +310,29 @@ bot.command('/registrarse', async ctx => {
 
 bot.action('setDriverVehicleMoto', async ctx => {
     driversController.setVehicleType(ctx);
-    let { id } = ctx.update.callback_query.from;
-    await usersController.createProccess(id, 'insert_phone_driver');
-    ctx.reply('Escribe tu número de celular');
+    ctx.telegram.sendMessage(ctx.chat.id, '\u{1f44f} Bien hecho, registro terminado con exito!. Te llegará una notificación cuando un cliente solicite un servicio de taxi.');
+    editDriverInfo(ctx);
 });
 
 bot.action('setDriverVehicleAuto', async ctx => {
     driversController.setVehicleType(ctx);
-    let { id } = ctx.update.callback_query.from;
-    await usersController.createProccess(id, 'insert_phone_driver');
-    ctx.reply('Escribe tu número de celular');
-});
-
-bot.action('update_phone', async ctx => {
-    let { id } = ctx.update.callback_query.from;
-    await usersController.createProccess(id, 'update_phone_driver');
-    ctx.reply('Escribe tu número de celular');
-});
-
-bot.action('update_avatar', async ctx => {
-    let { id } = ctx.update.callback_query.from;
-    await usersController.createProccess(id, 'update_avatar_driver');
-    ctx.reply('Tómate o elige una fotografía y envíala');
+    ctx.telegram.sendMessage(ctx.chat.id, '\u{1f44f} Bien hecho, registro terminado con exito!. Te llegará una notificación cuando un cliente solicite un servicio de taxi.');
+    editDriverInfo(ctx);
 });
 
 function editDriverInfo(ctx){
-    ctx.telegram.sendMessage(ctx.chat.id, `Puedes editar tu información seleccionando alguna de las siguientes opciones:`, {
-        reply_markup: {
-            inline_keyboard: [
-                [{text: 'Nro de celular \u{1f4f1}', callback_data: "update_phone"}, {text: 'Foto de contacto \u{1f5bc}', callback_data: "update_avatar"}]
-            ]
-        }
-    });
+    ctx.telegram.sendMessage(ctx.chat.id, `Puedes editar tu información seleccionando alguna de las siguientes opciones:`,
+        Markup.keyboard(
+            [Markup.button.contactRequest('Número de contacto'), Markup.button.text('Imagen de contacto')]
+        )
+    );
 }
 
+bot.hears('Imagen de contacto', async ctx => {
+    let { id } = ctx.update.message.from;
+    await usersController.createProccess(id, 'update_avatar_driver');
+    ctx.reply('Tómate o elige una fotografía y envíala');
+});
 
 bot.on('photo', async ctx => {
     let { id } = ctx.update.message.from;
@@ -330,18 +352,13 @@ bot.on('photo', async ctx => {
         }
 
         switch (name) {
-            case 'insert_avatar_driver':
-                await driversController.updateColumn('avatar', file_path, code);
-                await usersController.deleteProccess(code);
-                ctx.reply('\u{1f44f} Bien hecho, registro terminado con exito!. Te llegará una notificación cuando un cliente solicite un servicio de taxi.');
-                editDriverInfo(ctx);
-                break;
             case 'update_avatar_driver':
                 await driversController.updateColumn('avatar', file_path, code);
                 ctx.reply('Imagen de contacto actualizada!');
                 await usersController.deleteProccess(code);
                 // ctx.replyWithPhoto({
                 //     url: `${config.telegram.api}/file/bot${config.telegram.token}/${file_path}`,
+                //     caption: 'Imagen de avatar',
                 //     filename: file_path.replace('photos/', '')
                 // });
                 break;
@@ -352,40 +369,29 @@ bot.on('photo', async ctx => {
     }
 });
 
-bot.on('text', async ctx => {
-    let { from, text } = ctx.update.message;
-    let proccess = await usersController.findProccess(from.id);
-
-    if(proccess.length){
-        let { name, code } = proccess[0];
-        switch (name) {
-            case 'insert_phone_driver':
-                await driversController.updateColumn('phone', text, code);
-                await usersController.deleteProccess(code);
-                await usersController.createProccess(from.id, 'insert_avatar_driver');
-                ctx.reply('Envíanos una foto para tu perfil');
-                break;
-            case 'update_phone_driver':
-                await driversController.updateColumn('phone', text, code);
-                ctx.reply('Número de celular actualizado!');
-                await usersController.deleteProccess(code);
-                break;
-        
-            default:
-                break;
-        }
-    }else{
-        welcome(ctx);
-    }
+bot.on('contact', async ctx => {
+    let { from,  contact} = ctx.update.message;
+    await driversController.updateColumn('phone', contact.phone_number, from.id);
+    await usersController.updateColumn('phone', contact.phone_number, from.id);
+    ctx.reply('Número de contacto actualizado \u{1f44f}');
 })
+
 
 
 bot.launch()
 
+// Middleware
+app.use(body_parser.urlencoded({extended:true}));
+
 
 // Routes
-app.get('/', (req, res) => {
-    res.sendFile(__dirname + '/views/chat.html');
+app.get('/service', (req, res) => {
+    res.sendFile(__dirname + '/views/map.html');
+});
+
+app.post('/driver/update/location', async (req, res) => {
+    let data = req.body;
+    await driversController.updateColumn('last_location', JSON.stringify(data.position), data.code);
 });
 
 
