@@ -30,6 +30,7 @@
             }
         </style>
         <script>
+            const URL = `${window.location.hostname}:${window.location.port}`;
             const queryString = window.location.search;
             const urlParams = new URLSearchParams(queryString);
             const latitude = parseFloat(urlParams.get('lat'));
@@ -79,7 +80,7 @@
                             }
 
                             $.ajax({
-                                url: 'http://127.0.0.1:3000/driver/update/location',
+                                url: `${URL}/driver/update/location`,
                                 type: 'post',
                                 data: body,
                                 success: function(data){}

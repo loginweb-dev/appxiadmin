@@ -11,6 +11,8 @@ const { Telegraf, Markup } = require('telegraf');
 
 const bot = new Telegraf(config.telegram.token);
 
+const URL = config.debug ? `${config.url}:${config.port}` : config.url;
+
 // Controllers
 const usersController = require(`${__dirname}/app/controllers/usersController.js`);
 const driversController = require(`${__dirname}/app/controllers/driversController.js`);
@@ -115,7 +117,7 @@ function selectVehicle(ctx){
             if(driver.status == 1){
                 ctx.telegram.sendMessage(driver.code, `Hola ${driver.name}, un cliente solicitó una carrera!`,
                     Markup.inlineKeyboard(
-                        [Markup.button.url('Ver ubicación', `${config.api}/service?lat=${location[0].latitude}&lng=${location[0].longitude}`), {text: `Aceptar ID:${location[0].id}`, callback_data: "aceptar_solicitud"}]
+                        [Markup.button.url('Ver ubicación', `${URL}/service?lat=${location[0].latitude}&lng=${location[0].longitude}`), {text: `Aceptar ID:${location[0].id}`, callback_data: "aceptar_solicitud"}]
                     )
                 );
             }
@@ -187,7 +189,7 @@ async function sendTimeArrival(ctx, time){
         if(service[0].status == 1){
             
             ctx.reply('Para ver la ruta que debes seguir presiona el siguiente botón', Markup.inlineKeyboard([
-                Markup.button.url('Ver ruta', `${config.api}/service?code=${service[0].driver_code}&lat=${service[0].latitude}&lng=${service[0].longitude}`),
+                Markup.button.url('Ver ruta', `${URL}/service?code=${service[0].driver_code}&lat=${service[0].latitude}&lng=${service[0].longitude}`),
             ]));
             ctx.telegram.sendMessage(service[0].code, `Tu taxi llegará en aproximadamente ${time} minutos. \u{23f1}`, {
                 reply_markup: {
@@ -209,7 +211,6 @@ bot.action('get_driver_location', async ctx => {
             let location = JSON.parse(last_location);
             let lat = parseFloat(location.lat);
             let lon = parseFloat(location.lng);
-            console.log(lat, lon)
             // @ts-ignore
             ctx.replyWithLocation(lat, lon, { live_period: 300 }).then((message) => {
                 const timer = setInterval(async () => {
@@ -229,6 +230,8 @@ bot.action('get_driver_location', async ctx => {
                     }
                 }, 2000)
             })
+        }else{
+            ctx.reply(`Tu taxi aún no ha activa su localización, intenta en un par de minutos.`);
         }
     }
 });
@@ -344,6 +347,7 @@ bot.on('photo', async ctx => {
         let chat_id = ctx.update.message.chat.id;
         let file_id = ctx.update.message.photo[0].file_id;
         let url = `${config.telegram.api}/bot${config.telegram.token}/getFile?chat_id=${chat_id}&file_id=${file_id}`
+        console.log(url)
         let file_info = await axios.get(url).then(res => res.data).catch(error => error);
         
         let file_path = '';
@@ -407,6 +411,6 @@ app.post('/driver/update/location', async (req, res) => {
 // });
 
 // Start server
-http.listen(3000, () => {
-    console.log('listening on *:3000');
+http.listen(config.port, () => {
+    console.log(`listening on *:${config.port}`);
 });
