@@ -94,15 +94,6 @@ bot.on('location', async ctx => {
 bot.action('selectMoto', ctx => {
     selectVehicle(ctx);
     ctx.reply(`Tu solicitud ha sido enviada.`);
-    // let lat = -14.836968;
-    // let lon = -64.901205;
-    // ctx.replyWithLocation(lat, lon, { live_period: 300 }).then((message) => {
-    //     const timer = setInterval(() => {
-    //     lat += Math.random() * 0.001
-    //     lon += Math.random() * 0.001
-    //     ctx.telegram.editMessageLiveLocation(message.chat.id, message.message_id, '', lat, lon).catch(() => clearInterval(timer))
-    //     }, 5000)
-    // })
 });
 
 bot.action('selectAuto', ctx => {
@@ -187,7 +178,7 @@ async function sendTimeArrival(ctx, time){
     let service = await servicesController.findLast(id);
     if(service.length){
         if(service[0].status == 1){
-            
+            await servicesController.updateColumn('time', time, service[0].id);
             ctx.reply('Para ver la ruta que debes seguir presiona el siguiente botón', Markup.inlineKeyboard([
                 Markup.button.url('Ver ruta', `${URL}/service?code=${service[0].driver_code}&lat=${service[0].latitude}&lng=${service[0].longitude}`),
             ]));
@@ -207,12 +198,13 @@ bot.action('get_driver_location', async ctx => {
     var service = await servicesController.findServiceByUser(id);
     if(service.length){
         let last_location = service[0].last_location;
+        let estimated_time = service[0].time;
         if(last_location){
             let location = JSON.parse(last_location);
             let lat = parseFloat(location.lat);
             let lon = parseFloat(location.lng);
             // @ts-ignore
-            ctx.replyWithLocation(lat, lon, { live_period: 300 }).then((message) => {
+            ctx.replyWithLocation(lat, lon, { live_period: (estimated_time*60) }).then((message) => {
                 const timer = setInterval(async () => {
                     let service = await servicesController.findServiceByUser(id);
                     if(service.length){
@@ -239,6 +231,7 @@ bot.action('get_driver_location', async ctx => {
 bot.command('/disponible', async ctx => {
     let { id } = ctx.message.from
     await driversController.updateColumn('status', 1, id);
+    await driversController.updateColumn('last_location', '', id);
     var service = await servicesController.findLast(id);
     if(service.length){
         // Actualizar estado del servicio a realizado "2"
@@ -258,6 +251,17 @@ bot.command('/disponible', async ctx => {
         });
     }
     ctx.reply(`Estado disponible activado! \u{1f44d}`);
+});
+
+bot.command('/ocupado', async ctx => {
+    let { id } = ctx.message.from
+    await driversController.updateColumn('status', 0, id);
+    await driversController.updateColumn('last_location', '', id);
+    ctx.telegram.sendMessage(ctx.chat.id, `Estado ocupado activado! \u{1f44d}, puedes ponerte diponible presionando el botón de abajo`,
+        Markup.keyboard(
+            [Markup.button.text('/disponible')]
+        )
+    );
 });
 
 bot.action('bad_service', async ctx => {
@@ -393,9 +397,12 @@ app.get('/service', (req, res) => {
     res.sendFile(__dirname + '/views/map.html');
 });
 
-app.post('/driver/update/location', async (req, res) => {
-    let data = req.body;
-    await driversController.updateColumn('last_location', JSON.stringify(data.position), data.code);
+app.get('/driver/update/location/:code/:lat/:lng', async (req, res) => {
+    let {code, lat, lng} = req.params;
+    let position = {
+        lat, lng 
+    }
+    await driversController.updateColumn('last_location', JSON.stringify(position), code);
 });
 
 
