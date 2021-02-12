@@ -55,7 +55,7 @@ module.exports = {
     },
     createLocation: (id, data) => {
         let date = moment().format('YYYY-MM-DD hh:mm:ss');
-        let query = `INSERT INTO locations
+        let query = `INSERT INTO user_locations
                     (user_id, latitude, longitude, created_at, updated_at, deleted_at) VALUES
                     (${id}, "${data.location.latitude}", "${data.location.longitude}", "${ date }", "${ date }", NULL)`;
         return new Promise(function (resolve, reject) {
@@ -66,7 +66,7 @@ module.exports = {
         });
     },
     findLocation: (id) => {
-        let query = `SELECT * FROM locations as l, users as u WHERE u.id = l.user_id and l.id = ${id}`;
+        let query = `SELECT u.*, l.id as location_id, l.status as location_status FROM user_locations as l, users as u WHERE u.id = l.user_id and l.id = ${id}`;
         return new Promise(function (resolve, reject) {
             connection.query(query, function (err, results) {
                 if (err) return reject(err);
@@ -75,7 +75,7 @@ module.exports = {
         });
     },
     lastLocationByUserCode: (code) => {
-        let query = `SELECT * FROM users as u, locations as l WHERE u.id = l.user_id and u.code = ${code} ORDER BY l.id DESC LIMIT 1`;
+        let query = `SELECT u.*, l.id as location_id, l.vehicle_type, l.status as location_status FROM users as u, user_locations as l WHERE u.id = l.user_id and u.code = ${code} ORDER BY l.id DESC LIMIT 1`;
         return new Promise(function (resolve, reject) {
             connection.query(query, function (err, results) {
                 if (err) return reject(err);
@@ -85,6 +85,15 @@ module.exports = {
     },
     updateColumn: (key, value, code) => {
         let query = `UPDATE users SET ${key} = '${value}' where code = "${code}"`;
+        return new Promise(function (resolve, reject) {
+            connection.query(query, function (err, results) {
+                if (err) return reject(err);
+                return resolve(results);
+            });
+        });
+    },
+    updateColumnLocation: (key, value, id) => {
+        let query = `UPDATE user_locations SET ${key} = '${value}' where id = "${id}"`;
         return new Promise(function (resolve, reject) {
             connection.query(query, function (err, results) {
                 if (err) return reject(err);

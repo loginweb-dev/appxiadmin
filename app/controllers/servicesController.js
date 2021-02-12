@@ -6,7 +6,7 @@ module.exports = {
 
     },
     find: (id) => {
-        let query = `SELECT * FROM services as s, locations as l, users as u where s.location_id = l.id and l.user_id = u.id and s.id = ${id}`;
+        let query = `SELECT * FROM services as s, user_locations as l, users as u where s.location_id = l.id and l.user_id = u.id and s.id = ${id}`;
         return new Promise(function (resolve, reject) {
             connection.query(query, function (err, results) {
                 if (err) return reject(err);
@@ -15,7 +15,7 @@ module.exports = {
         });
     },
     findLast: (code) => {
-        let query = `SELECT s.*, u.code, d.code as driver_code, l.latitude, l.longitude FROM drivers as d, services as s, locations as l, users as u
+        let query = `SELECT s.*, u.code, d.code as driver_code, l.latitude, l.longitude FROM drivers as d, services as s, user_locations as l, users as u
                     where d.id = s.driver_id and s.location_id = l.id and l.user_id = u.id and d.code = ${code} ORDER BY s.id DESC LIMIT 1`;
         return new Promise(function (resolve, reject) {
             connection.query(query, function (err, results) {
@@ -24,8 +24,8 @@ module.exports = {
             });
         });
     },
-    findServiceByUser: (code) => {
-        let query = `SELECT s.*, d.last_location FROM drivers as d, services as s, locations as l, users as u
+    findLastServiceByUser: (code) => {
+        let query = `SELECT s.*, d.last_location FROM drivers as d, services as s, user_locations as l, users as u
                     where d.id = s.driver_id and s.location_id = l.id and l.user_id = u.id and u.code = ${code} ORDER BY s.id DESC LIMIT 1`;
         return new Promise(function (resolve, reject) {
             connection.query(query, function (err, results) {

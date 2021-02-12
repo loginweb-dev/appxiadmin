@@ -53,14 +53,12 @@ module.exports = {
             }
         });
     },
-    getDriverTypeVehicle: data => {
+    getDriverTypeVehicle: (type) => {
         return new Promise(function (resolve, reject) {
-            let type = data.update.callback_query.data == 'selectMoto' ? 'Motocicleta' : 'Automóvil';
-            let { id } = data.update.callback_query.from;
             let query = `SELECT * FROM drivers where vehicle_type = "${type}"`;
             connection.query(query, function (err, results) {
                 if (err) return reject(err);
-                return resolve({results, id});
+                return resolve({results});
             });
         });
     }
